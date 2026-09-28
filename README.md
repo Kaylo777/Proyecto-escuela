@@ -261,13 +261,17 @@ caído, usando los valores de respaldo de su `application.yml` local.
 Flujo: `alumnos` crea un alumno → publica `alumno.creado` → `administracion` lo recibe en
 su listener. La conversión del mensaje usa `Jackson2JsonMessageConverter`.
 
+Verificado en ejecución (ver *Pruebas realizadas*): al crear un alumno por la API,
+`alumnos` publica el evento y `administracion` lo recibe, y al revés al crear un docente.
+
 ---
 
 ## 9. Pruebas realizadas
 
-Levantado el stack completo, se ejecutó esta matriz contra el gateway. **18 de 19
-pruebas pasaron**; la única que fallaba (500 en `POST /api/alumnos`) era por RabbitMQ
-ausente, no por la seguridad.
+Levantado el stack completo (con RabbitMQ), se ejecutó esta matriz contra el gateway.
+**Todas las pruebas pasaron.**
+
+### Seguridad y roles
 
 | # | Prueba | Esperado | Resultado |
 |---|---|---|---|
@@ -280,22 +284,47 @@ ausente, no por la seguridad.
 | 7 | `GET /api/alumnos` con user | 200 | OK |
 | 8 | `GET /api/alumnos` sin token | 401 | OK |
 | 9 | `POST /api/alumnos` con user | 403 | OK |
-| 10 | `GET /actuator/health` sin token | 200 | OK |
-| 11 | `GET /actuator/env` Basic `monitor` correcto | 200 | OK |
-| 12 | `GET /actuator/env` Basic `monitor` incorrecto | 401 | OK |
-| 13 | `GET /actuator/env` sin credencial | 401 | OK |
-| 14 | Basic `monitor` sobre `/api/alumnos` | 401 | OK |
-| 15 | `POST /auth/refresh` token inválido | 401 | OK |
-| 16 | Refresh token usado como Bearer en `/api` | 401 | OK |
-| 17 | Access token usado en `/auth/refresh` | 401 | OK |
-| 18 | Ruta inexistente con token válido | 403 | OK |
-| 19 | **Bypass del gateway**: `POST` directo a `:8101` con user | 403 | OK |
-| 20 | **Bypass del gateway**: `GET` directo a `:8101` con user | 200 | OK |
-| 21 | **Bypass del gateway**: `GET` directo a `:8101` sin token | 401 | OK |
-| 22 | `POST /auth/refresh` con refresh válido | 200 + token nuevo | OK |
+| 10 | `POST /api/alumnos` sin token | 401 | OK |
+| 11 | `GET /actuator/health` sin token | 200 | OK |
+| 12 | `GET /actuator/env` Basic `monitor` correcto | 200 | OK |
+| 13 | `GET /actuator/env` Basic `monitor` incorrecto | 401 | OK |
+| 14 | `GET /actuator/env` sin credencial | 401 | OK |
+| 15 | Basic `monitor` sobre `/api/alumnos` | 401 | OK |
+| 16 | `POST /auth/refresh` token inválido | 401 | OK |
+| 17 | Refresh token usado como Bearer en `/api` | 401 | OK |
+| 18 | Access token usado en `/auth/refresh` | 401 | OK |
+| 19 | `POST /auth/refresh` con refresh válido | 200 + token nuevo | OK |
+| 20 | Ruta inexistente con token válido | 403 | OK |
 
-Las pruebas 19–21 son las importantes: confirman que **saltarse el gateway no sirve**,
-porque el microservicio revalida el token por su cuenta.
+Las pruebas 17 y 18 son las que confirman que los dos secretos separadas cumplen su
+función: un token de un tipo no sirve como credencial del otro.
+
+### Bypass del gateway
+
+| # | Prueba | Esperado | Resultado |
+|---|---|---|---|
+| 21 | `POST` directo a `:8101` con user | 403 | OK |
+| 22 | `GET` directo a `:8101` con user | 200 | OK |
+| 23 | `GET` directo a `:8101` sin token | 401 | OK |
+
+Estas tres son las más importantes del trabajo: confirman que **saltarse el gateway no
+sirve**, porque el microservicio revalida el token por su cuenta.
+
+### CRUD y mensajería
+
+| # | Prueba | Esperado | Resultado |
+|---|---|---|---|
+| 24 | `POST /api/alumnos` con admin | 201 | OK |
+| 25 | `POST /api/administracion` con admin | 201 | OK |
+| 26 | `GET /api/administracion` con admin / user | 200 | OK |
+| 27 | Evento `alumno.creado` publicado por `alumnos` | publicado | OK |
+| 28 | Evento `alumno.creado` recibido por `administracion` | recibido | OK |
+| 29 | Evento `docente.creado` publicado por `administracion` | publicado | OK |
+| 30 | Evento `docente.creado` recibido por `alumnos` | recibido | OK |
+
+Topología confirmada en el broker: exchange `microservicios.exchange` (topic) con las
+colas `microservicios.cola.alumnos` y `microservicios.cola.administracion`, un consumidor
+activo en cada una, y los bindings `alumno.*` y `docente.*`.
 
 Además se verificó que los tres hashes BCrypt de la configuración
 (`admin123`, `user123`, `monitor123`) corresponden realmente a esas contraseñas, y que
@@ -305,11 +334,13 @@ el frontend compila (`ng build`) y sirve (`ng serve` → 200 en `/` y `/main.js`
 
 ## 10. Limitaciones conocidas
 
-Points a tener en cuenta, asumidos conscientemente para este trabajo:
+Puntos a tener en cuenta, asumidos conscientemente para este trabajo:
 
 1. **Sin Docker, `POST`/`PUT` devuelven 500.** El evento se publica de forma síncrona y
    si RabbitMQ no está, `AmqpConnectException` corta la respuesta. El `GET` y toda la
-   parte de JWT funcionan igual. Con `docker compose up -d` se resuelve.
+   parte de JWT funcionan igual. Con `docker compose up -d` se resuelve (es lo que
+   happens con el stack completo, ver *Pruebas realizadas*). En producción el patrón
+   correcto sería una *outbox* transaccional.
 2. **Los refresh tokens no se revocan.** Son JWT sin estado: si uno se filtra, sirve
    hasta 8 horas. En producción harían falta tokens opacos guardados en base de datos
    con rotación y revocación explícita.
@@ -323,6 +354,10 @@ Points a tener en cuenta, asumidos conscientemente para este trabajo:
 6. **Los puertos 8101/8102 están expuestos.** Están protegidos, pero en producción
    irían detrás del gateway en una red interna.
 7. **Usuarios en configuración, no en base de datos.** Es un dato de partida fijo.
+8. **`eureka.instance.prefer-ip-address: true`.** Sin esto, Eureka publicaba el nombre
+   del equipo (por ejemplo `KAYLO777.mshome.net`), el load balancer del gateway no lo
+   resolvía y todo `/api/**` respondía 500 con    `NXDOMAIN`. Se registra la IP para evitarlo,
+   y de paso que un adaptador virtual (WSL, Docker, Hyper-V) no sea elegido por error.
 
 ---
 

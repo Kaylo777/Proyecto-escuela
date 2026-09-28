@@ -46,6 +46,12 @@ eureka:
     fetch-registry: true
   instance:
     instance-id: ${spring.application.name}:${random.value}
+    # Registrar la IP en vez del hostname. Sin esto, Eureka publica el nombre del
+    # equipo (p.ej. KAYLO777.mshome.net) y el load balancer del gateway no lo
+    # resuelve: falla con NXDOMAIN y todo /api/** responde 500. Pasa en cualquier
+    # Windows donde el nombre de equipo no sea un nombre DNS valido, y tambien
+    # cuando hay adapters virtuales (WSL/Docker/Hyper-V) que chooses mal la IP.
+    prefer-ip-address: true
 
 management:
   endpoints:
