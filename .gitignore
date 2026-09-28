@@ -27,6 +27,22 @@ Thumbs.db
 .env.local
 
 # IDE
+
+# IntelliJ IDEA
 .idea/
 *.iml
-.vscode/
+
+# Visual Studio Code (config personal; la compartida va en .vscode/ del repo si se decide)
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# Eclipse
+# .project, .classpath y .settings/ son específicos de cada máquina: si se commitean,
+# generan conflictos entre Eclipse y cualquier otro editor, y paths absolutos rotos.
+.project
+.classpath
+.settings/
+.factorypath
+*.launch

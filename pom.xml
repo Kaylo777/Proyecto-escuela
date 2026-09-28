@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  POM agregador de la raiz. No produce un jar: solo agrupa los 6 microservicios.
+
+  Utilidad:
+   - Un solo comando compila todo:      .\mvnw.cmd -DskipTests package
+   - En Eclipse: File > Import > Existing Maven Projects sobre ESTE pom, y aparecen
+     los 6 servicios de una vez (en vez de importarlos uno por uno).
+   - Un solo lugar para cambiar la version de Spring Boot / Spring Cloud.
+
+  Cada microservicio sigue siendo un proyecto Maven independiente y autonomous
+  (tiene su propio mvnw.cmd y su propio pom), asi que tambien se pueden compilar y
+  ejecutar por separado, que es lo que hace iniciar-backend.ps1.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>com.example.colegio</groupId>
+	<artifactId>colegio-jwt</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<packaging>pom</packaging>
+	<name>colegio-jwt</name>
+	<description>
+		Spring Security + JWT sobre Spring Cloud: gateway, microservicios de alumnos y
+		administracion, Eureka, Config Server y Spring Boot Admin.
+	</description>
+
+	<!-- El orden no afecta al build (no hay dependencias entre modulos: se hablan
+	     por HTTP y por RabbitMQ), pero coincide con el orden de arranque. -->
+	<modules>
+		<module>backend/registry</module>
+		<module>backend/config-server</module>
+		<module>backend/alumnos</module>
+		<module>backend/administracion</module>
+		<module>backend/gateway</module>
+		<module>backend/admin-server</module>
+	</modules>
+
+	<properties>
+		<java.version>17</java.version>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<spring-boot.version>4.0.8</spring-boot.version>
+		<spring-cloud.version>2025.1.3</spring-cloud.version>
+		<!-- Los tests de arranque levantan el contexto de Spring, que necesita al
+		     Config Server y a RabbitMQ. Se corren a mano: .\mvnw.cmd test -->
+		<skipTests>true</skipTests>
+	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-dependencies</artifactId>
+				<version>${spring-boot.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-maven-plugin</artifactId>
+					<version>${spring-boot.version}</version>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+	</build>
+</project>

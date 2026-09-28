@@ -105,7 +105,22 @@ foreach ($s in @('registry','config-server','alumnos','administracion','gateway'
 }
 ```
 
-### 3.2 Levantar RabbitMQ (opcional)
+### 3.2 Compilar todo de una vez (con el POM agregador)
+
+En la raíz hay un `pom.xml` agregador con los 6 microservicios como módulos, así que
+también alcanza con un solo comando:
+
+```powershell
+.\mvnw.cmd -DskipTests package
+```
+
+El orden del reactor es `registry` → `config-server` → `alumnos` → `administracion` →
+`gateway` → `admin-server`. Tarda unos 15 segundos con las dependencias ya descargadas.
+
+Cada servicio sigue siendo autónomo y se puede compilar por separado (es lo que usa
+`iniciar-backend.ps1`), porque cada uno tiene su propio `pom.xml` y su propio `mvnw.cmd`.
+
+### 3.3 Levantar RabbitMQ (opcional)
 
 ```powershell
 docker compose up -d
@@ -116,7 +131,7 @@ Sin RabbitMQ los servicios **igual arrancan** y todo lo relativo a JWT y roles f
 igual; lo único que falla es `POST`/`PUT` de alumnos y docentes, porque el evento no se
 puede publicar (ver *Limitaciones conocidas*).
 
-### 3.3 Levantar el backend
+### 3.4 Levantar el backend
 
 ```powershell
 .\iniciar-backend.ps1
@@ -132,13 +147,46 @@ Para detener todo:
 .\detener-backend.ps1
 ```
 
-### 3.4 Levantar el frontend
+### 3.5 Levantar el frontend
 
 ```powershell
 cd frontend
 npm install
 npm start          # http://localhost:4200
 ```
+
+### 3.6 Trabajar en Eclipse
+
+El backend se puede abrir completo desde Eclipse, sin importar servicio por servicio,
+porque la raíz tiene un POM agregador.
+
+1. Abrí la carpeta raíz del proyecto en Eclipse.
+2. `File` → `New` → `Maven Project` → **Existing Maven Projects**.
+3. Seleccioná el `pom.xml` de la **raíz** (no las carpetas de cada servicio).
+4. Finish: aparecen los 6 microservicios como proyectos Maven.
+5. `Project` → `Update Maven Project` (Ctrl+Shift+O) para resolver dependencias.
+
+Requisitos: JDK 17 o superior configurado en `Window` → `Preferences` → `Java` →
+`Installed JREs`.
+
+Cada microservicio es un proyecto Maven independiente, así que también se puede hacer
+`Run As` → `Spring Boot App` sobre cualquiera de ellos. Para levantarlos todos con el
+orden y las esperas correctas conviene usar `.\iniciar-backend.ps1` desde PowerShell
+(usando los `target\*.jar` ya compilados), no desde Eclipse.
+
+Eclipse genera `.project`, `.classpath` y `.settings/`, que están en `.gitignore` a
+propósito: son específicos de cada máquina y si se commitean generan conflictos.
+
+### 3.7 Trabajar en Visual Studio Code
+
+El repo trae `.vscode/extensions.json` y `.vscode/settings.json` compartidos. Al abrir
+la carpeta en VS Code aparece una notificación para instalar:
+
+- **Extension Pack for Java** (incluye Maven for Java, que reconoce el POM agregador)
+- **Angular Language Service**, para el front
+
+En `.vscode/launch.json` se pueden agregar configuraciones de depuración para correr
+cada microservicio. El front se levanta desde la terminal integrada con `npm start`.
 
 ---
 
@@ -365,6 +413,7 @@ Puntos a tener en cuenta, asumidos conscientemente para este trabajo:
 
 ```
 colegio-jwt/
+├── pom.xml                   POM agregador: compila los 6 microservicios juntos
 ├── backend/
 │   ├── gateway/            API Gateway: login, JWT, roles, rutas
 │   ├── alumnos/            Microservicio de alumnos
@@ -373,6 +422,7 @@ colegio-jwt/
 │   ├── config-server/      Configuración centralizada (+ archivos en resources/config)
 │   └── admin-server/       Spring Boot Admin
 ├── frontend/               Angular: login, alumnos, docentes, panel de seguridad
+├── .vscode/                Configuración compartida de Visual Studio Code
 ├── iniciar-backend.ps1     Levanta los 6 servicios en orden, esperando cada puerto
 ├── detener-backend.ps1     Detiene todo
 ├── docker-compose.yml      RabbitMQ

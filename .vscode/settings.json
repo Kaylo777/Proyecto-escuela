@@ -1,0 +1,16 @@
+{
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.import.generatesMetadataFiles": false,
+  "files.exclude": {
+    "**/target": true,
+    "**/node_modules": true,
+    "**/data": true
+  },
+  "search.exclude": {
+    "**/target": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/data": true,
+    "**/backend/logs": true
+  }
+}
