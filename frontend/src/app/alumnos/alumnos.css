@@ -1,0 +1,95 @@
+.ruta {
+  color: #667;
+  font-size: 0.85rem;
+  margin-top: -0.5rem;
+}
+
+.mensaje {
+  background: #e8f5e9;
+  border: 1px solid #81c784;
+  color: #2e7d32;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  margin: 1rem 0;
+}
+
+.contenedor {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.campo {
+  margin-bottom: 0.8rem;
+}
+
+.campo label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.campo input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.acciones {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #f5f5f5;
+}
+
+.btn-primario {
+  background: #1976d2;
+  color: #fff;
+  border-color: #1976d2;
+}
+
+.btn-editar {
+  background: #ffb300;
+  color: #fff;
+  border-color: #ffb300;
+  padding: 0.3rem 0.7rem;
+}
+
+.btn-eliminar {
+  background: #d32f2f;
+  color: #fff;
+  border-color: #d32f2f;
+  padding: 0.3rem 0.7rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+th, td {
+  border: 1px solid #e0e0e0;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+th {
+  background: #fafafa;
+}
+
+.vacio {
+  text-align: center;
+  color: #999;
+}

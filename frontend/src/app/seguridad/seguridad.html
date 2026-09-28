@@ -1,0 +1,46 @@
+<h2>Seguridad de la sesión (JWT)</h2>
+<p class="ruta">Panel restringido al rol ADMIN. El token viaja firmado: el microservicio lo vuelve a validar, no confía solo en el gateway.</p>
+
+@if (verificacion()) {
+  <div class="mensaje">{{ verificacion() }}</div>
+}
+
+<div class="contenedor">
+  <div class="formulario">
+    <h3>Sesión actual</h3>
+    <p>
+      <strong>Usuario:</strong> {{ auth.usuario() }}<br />
+      <strong>Roles:</strong> {{ auth.roles().join(', ') || 'sin roles' }}<br />
+      <strong>Access token:</strong> {{ auth.getToken() ? 'presente' : 'ausente' }}<br />
+      <strong>Refresh token:</strong> {{ auth.getRefreshToken() ? 'presente' : 'ausente' }}
+    </p>
+    <div class="acciones">
+      <button type="button" class="btn btn-primario" (click)="verificar()">Verificar token en el gateway</button>
+      <button type="button" class="btn" (click)="renovar()">Renovar token</button>
+    </div>
+  </div>
+
+  <div class="tabla">
+    <h3>Contenido del token (payload decodificado)</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Claim</th>
+          <th>Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (claim of claims(); track claim.nombre) {
+          <tr>
+            <td>{{ claim.nombre }}</td>
+            <td>{{ claim.valor }}</td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="2" class="vacio">No hay token activo.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

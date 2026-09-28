@@ -1,0 +1,93 @@
+<h2>Gestión de Alumnos</h2>
+<p class="ruta">Accedido a través del API Gateway (localhost:8080 -> microservicio alumnos)</p>
+
+@if (mensaje()) {
+  <div class="mensaje">{{ mensaje() }}</div>
+}
+
+<div class="contenedor">
+  @if (esAdmin) {
+    <div class="formulario">
+      <h3>{{ editando() ? 'Editar Alumno' : 'Nuevo Alumno' }}</h3>
+      <form (ngSubmit)="guardar()">
+      <div class="campo">
+        <label for="nombre">Nombre</label>
+        <input id="nombre" name="nombre" type="text" [(ngModel)]="formulario.nombre" required />
+      </div>
+      <div class="campo">
+        <label for="apellido">Apellido</label>
+        <input id="apellido" name="apellido" type="text" [(ngModel)]="formulario.apellido" required />
+      </div>
+      <div class="campo">
+        <label for="dni">DNI</label>
+        <input id="dni" name="dni" type="text" [(ngModel)]="formulario.dni" />
+      </div>
+      <div class="campo">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" [(ngModel)]="formulario.email" />
+      </div>
+      <div class="campo">
+        <label for="curso">Curso</label>
+        <input id="curso" name="curso" type="text" [(ngModel)]="formulario.curso" />
+      </div>
+      <div class="campo">
+        <label for="fechaNacimiento">Fecha de Nacimiento</label>
+        <input id="fechaNacimiento" name="fechaNacimiento" type="date" [(ngModel)]="formulario.fechaNacimiento" />
+      </div>
+      <div class="acciones">
+        <button type="submit" class="btn btn-primario">{{ editando() ? 'Guardar cambios' : 'Crear alumno' }}</button>
+        @if (editando()) {
+          <button type="button" class="btn" (click)="cancelar()">Cancelar</button>
+        }
+      </div>
+    </form>
+    </div>
+  } @else {
+    <div class="formulario">
+      <p class="ruta">Sesión iniciada con rol <strong>USER</strong>: solo lectura. Para crear, editar o eliminar Alumnos necesitás el rol <strong>ADMIN</strong>.</p>
+    </div>
+  }
+
+  <div class="tabla">
+    <h3>Listado ({{ alumnos().length }})</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Apellido</th>
+          <th>DNI</th>
+          <th>Email</th>
+          <th>Curso</th>
+          <th>F. Nacimiento</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (alumno of alumnos(); track alumno.id) {
+          <tr>
+            <td>{{ alumno.id }}</td>
+            <td>{{ alumno.nombre }}</td>
+            <td>{{ alumno.apellido }}</td>
+            <td>{{ alumno.dni }}</td>
+            <td>{{ alumno.email }}</td>
+            <td>{{ alumno.curso }}</td>
+            <td>{{ alumno.fechaNacimiento }}</td>
+            <td class="acciones">
+              @if (esAdmin) {
+                <button class="btn btn-editar" (click)="editar(alumno)">Editar</button>
+                <button class="btn btn-eliminar" (click)="eliminar(alumno)">Eliminar</button>
+              } @else {
+                <span class="ruta">—</span>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="8" class="vacio">No hay alumnos registrados.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

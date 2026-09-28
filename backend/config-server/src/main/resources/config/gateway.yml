@@ -1,0 +1,46 @@
+# Configuracion del API Gateway
+#
+# El gateway es el unico punto de entrada publico: autentica (POST /auth/login),
+# emite los tokens y aplica las reglas de autorizacion por rol.
+server:
+  port: 8080
+
+app:
+  security:
+    # Usuarios que pueden iniciar sesion. Las contrasenas estan hasheadas con
+    # BCrypt ({bcrypt}...) y las decodifica PasswordEncoderFactories, asi que
+    # nunca se comparan ni se guardan en texto plano.
+    # USER  -> solo lectura (GET)
+    # ADMIN -> lectura y escritura (POST, PUT, DELETE) + endpoints actuator
+    users:
+      admin:
+        # admin123
+        password: "{bcrypt}$2a$10$gZparbUDffZ1pKvmIM9gleYKE829oQYSoVK4kv75DS5BjfGcF.axu"
+        roles: [ ADMIN ]
+      user:
+        # user123
+        password: "{bcrypt}$2a$10$IOP08FQtJZ/8SFAgL0sSeeKQSdwOSFEJL8tqy46aotbNCgU0y1832"
+        roles: [ USER ]
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: alumnos
+              uri: lb://alumnos
+              predicates:
+                - Path=/api/alumnos/**
+            - id: administracion
+              uri: lb://administracion
+              predicates:
+                - Path=/api/administracion/**
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins: "*"
+                allowed-methods: "*"
+                allowed-headers: "*"

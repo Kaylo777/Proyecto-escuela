@@ -1,0 +1,19 @@
+# Configuracion del microservicio alumnos
+server:
+  port: 8101
+
+spring:
+  application:
+    name: alumnos
+  datasource:
+    url: jdbc:h2:file:./data/alumnos
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true

@@ -1,0 +1,32 @@
+# Maven / Java
+backend/**/target/
+backend/logs/
+
+# Node / Angular
+frontend/node_modules/
+frontend/dist/
+frontend/.angular
+
+# Bases de datos locales (H2)
+data/
+
+# Logs
+*.log
+*.err
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Resolucion de conflictos
+*.orig
+*.rej
+
+# Variables de entorno (no deberian estar, pero por si acaso)
+.env
+.env.local
+
+# IDE
+.idea/
+*.iml
+.vscode/

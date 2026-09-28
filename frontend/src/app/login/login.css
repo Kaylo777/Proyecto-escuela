@@ -1,0 +1,68 @@
+:host {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+}
+
+.login-card {
+  background: #fff;
+  border: 1px solid var(--borde, #d0d7e2);
+  border-radius: 10px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.login-card h2 {
+  margin: 0 0 0.25rem;
+}
+
+.subtitulo {
+  color: #5b6670;
+  font-size: 0.85rem;
+  margin: 0 0 1.25rem;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.9rem;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 1rem;
+  border: 1px solid #c3ccd9;
+  border-radius: 6px;
+}
+
+button {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  background: #fdecea;
+  color: #b3261e;
+  border: 1px solid #f5c6c1;
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.pista {
+  margin: 1rem 0 0;
+  font-size: 0.8rem;
+  color: #5b6670;
+  text-align: center;
+}

@@ -1,0 +1,68 @@
+.cabecera {
+  background: #1a237e;
+  color: #fff;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.titulo h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.titulo span {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+nav a {
+  color: #fff;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+nav a:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+nav a.activo {
+  background: rgba(255, 255, 255, 0.25);
+  font-weight: 600;
+}
+
+nav .usuario {
+  align-self: center;
+  font-size: 0.85rem;
+  opacity: 0.9;
+  margin-left: 0.5rem;
+}
+
+.salir {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  color: #fff;
+  padding: 0.45rem 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.salir:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+main {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}

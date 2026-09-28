@@ -1,0 +1,63 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway
+  config:
+    import: optional:configserver:http://localhost:8888
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: alumnos
+              uri: lb://alumnos
+              predicates:
+                - Path=/api/alumnos/**
+            - id: administracion
+              uri: lb://administracion
+              predicates:
+                - Path=/api/administracion/**
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins: "*"
+                allowed-methods: "*"
+                allowed-headers: "*"
+
+# Valores de respaldo para poder arrancar el gateway aunque el Config Server no
+# este levantado. La fuente de verdad es config-server/.../config/gateway.yml y
+# config/application.yml: si el Config Server responde, sus valores ganan.
+app:
+  jwt:
+    secret: clave-de-firma-access-token-colegio-microservicios-2026-seguro
+    refresh-secret: clave-de-firma-refresh-token-colegio-microservicios-2026-seguro
+    issuer: colegio-microservicios
+    expiration: 900000
+    refresh-expiration: 28800000
+  security:
+    users:
+      admin:
+        password: "{bcrypt}$2a$10$gZparbUDffZ1pKvmIM9gleYKE829oQYSoVK4kv75DS5BjfGcF.axu"
+        roles: [ ADMIN ]
+      user:
+        password: "{bcrypt}$2a$10$IOP08FQtJZ/8SFAgL0sSeeKQSdwOSFEJL8tqy46aotbNCgU0y1832"
+        roles: [ USER ]
+    monitoring:
+      username: monitor
+      password: "{bcrypt}$2a$10$bp3Rl8zJX0JTIDGf9qy0L.zP9Mx0HjmmXAoQUggKKjui60LLB/KzO"
+      roles: [ ADMIN ]
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway

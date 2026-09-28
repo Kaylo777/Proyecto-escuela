@@ -1,0 +1,15 @@
+# Normalizacion de fin de linea para que el repo no cambie al clonar en
+# Windows vs Linux. LF en el repositorio, conversion solo donde hace falta.
+
+* text=auto eol=lf
+
+# Scripts de Windows: necesitan CRLF para ejecutarse sin problemas
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binarios
+*.ico binary
+*.jar binary
+*.png binary
+*.jpg binary
+*.db binary

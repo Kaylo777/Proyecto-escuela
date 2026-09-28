@@ -1,0 +1,41 @@
+<div class="login-card">
+  <h2>Iniciar sesión</h2>
+  <p class="subtitulo">Acceso mediante token JWT en la API Gateway</p>
+
+  <form (ngSubmit)="entrar()" #form="ngForm">
+    <label>
+      Usuario
+      <input
+        name="usuario"
+        type="text"
+        [(ngModel)]="usuario"
+        required
+        autocomplete="username"
+      />
+    </label>
+
+    <label>
+      Contraseña
+      <input
+        name="password"
+        type="password"
+        [(ngModel)]="password"
+        required
+        autocomplete="current-password"
+      />
+    </label>
+
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
+
+    <button type="submit" [disabled]="form.invalid || cargando()">
+      {{ cargando() ? 'Ingresando…' : 'Ingresar' }}
+    </button>
+  </form>
+
+  <p class="pista">
+    Demo: <strong>admin</strong> / <strong>admin123</strong> (rol ADMIN) o
+    <strong>user</strong> / <strong>user123</strong> (rol USER)
+  </p>
+</div>

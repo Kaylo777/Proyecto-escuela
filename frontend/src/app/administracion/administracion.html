@@ -1,0 +1,81 @@
+<h2>Gestión de Docentes</h2>
+<p class="ruta">Accedido a través del API Gateway (localhost:8080 -> microservicio administracion)</p>
+
+@if (mensaje()) {
+  <div class="mensaje">{{ mensaje() }}</div>
+}
+
+<div class="contenedor">
+  @if (esAdmin) {
+    <div class="formulario">
+      <h3>{{ editando() ? 'Editar Docente' : 'Nuevo Docente' }}</h3>
+      <form (ngSubmit)="guardar()">
+      <div class="campo">
+        <label for="nombre">Nombre</label>
+        <input id="nombre" name="nombre" type="text" [(ngModel)]="formulario.nombre" required />
+      </div>
+      <div class="campo">
+        <label for="apellido">Apellido</label>
+        <input id="apellido" name="apellido" type="text" [(ngModel)]="formulario.apellido" required />
+      </div>
+      <div class="campo">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" [(ngModel)]="formulario.email" />
+      </div>
+      <div class="campo">
+        <label for="especialidad">Especialidad</label>
+        <input id="especialidad" name="especialidad" type="text" [(ngModel)]="formulario.especialidad" />
+      </div>
+      <div class="acciones">
+        <button type="submit" class="btn btn-primario">{{ editando() ? 'Guardar cambios' : 'Crear docente' }}</button>
+        @if (editando()) {
+          <button type="button" class="btn" (click)="cancelar()">Cancelar</button>
+        }
+      </div>
+    </form>
+    </div>
+  } @else {
+    <div class="formulario">
+      <p class="ruta">Sesión iniciada con rol <strong>USER</strong>: solo lectura. Para crear, editar o eliminar Docentes necesitás el rol <strong>ADMIN</strong>.</p>
+    </div>
+  }
+
+  <div class="tabla">
+    <h3>Listado ({{ docentes().length }})</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Apellido</th>
+          <th>Email</th>
+          <th>Especialidad</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (docente of docentes(); track docente.id) {
+          <tr>
+            <td>{{ docente.id }}</td>
+            <td>{{ docente.nombre }}</td>
+            <td>{{ docente.apellido }}</td>
+            <td>{{ docente.email }}</td>
+            <td>{{ docente.especialidad }}</td>
+            <td class="acciones">
+              @if (esAdmin) {
+                <button class="btn btn-editar" (click)="editar(docente)">Editar</button>
+                <button class="btn btn-eliminar" (click)="eliminar(docente)">Eliminar</button>
+              } @else {
+                <span class="ruta">—</span>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6" class="vacio">No hay docentes registrados.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

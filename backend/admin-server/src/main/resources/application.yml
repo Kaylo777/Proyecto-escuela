@@ -1,0 +1,41 @@
+server:
+  port: 9090
+
+spring:
+  application:
+    name: admin-server
+  boot:
+    admin:
+      # Spring Boot Admin lee los endpoints /actuator/** de cada servicio
+      # descubierto en Eureka. Como esos endpoints exigen ROLE_ADMIN, el panel
+      # se autentica con la cuenta de monitoreo (misma que define el Config
+      # Server en app.security.monitoring).
+      instance-auth:
+        enabled: true
+        default-user-name: monitor
+        default-password: monitor123
+
+  security:
+    # Usuario para entrar al PANEL (http://localhost:9090). Es distinto de la
+    # cuenta de monitoreo: "monitor" solo se usa internamente para leer los
+    # actuator de cada servicio, y no sirve para iniciar sesion en el panel.
+    user:
+      name: admin
+      password: admin123
+      roles: ADMIN
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always

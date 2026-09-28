@@ -1,0 +1,25 @@
+<header class="cabecera">
+  <div class="titulo">
+    <h1>Sistema de Microservicios</h1>
+    <span>Angular + API Gateway + Eureka + Config Server + RabbitMQ</span>
+  </div>
+  <nav>
+    <a routerLink="/alumnos" routerLinkActive="activo">Alumnos</a>
+    <a routerLink="/administracion" routerLinkActive="activo">Administración</a>
+    @if (auth.autenticado()) {
+      @if (auth.esAdmin()) {
+        <a routerLink="/seguridad" routerLinkActive="activo">Seguridad</a>
+      }
+      <span class="usuario">
+        Usuario: {{ auth.usuario() }} ({{ auth.roles().join(', ') }})
+      </span>
+      <button class="salir" (click)="salir()">Cerrar sesión</button>
+    } @else {
+      <a routerLink="/login" routerLinkActive="activo">Iniciar sesión</a>
+    }
+  </nav>
+</header>
+
+<main>
+  <router-outlet />
+</main>
