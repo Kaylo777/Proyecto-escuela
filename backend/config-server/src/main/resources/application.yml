@@ -4,18 +4,34 @@ server:
 spring:
   application:
     name: config-server
-  profiles:
-    active: native
+
+  # Backend "git": la configuracion NO esta dentro del jar, sino en un repositorio
+  # Git externo (config-repo/). El Config Server lo clona y lo sirve por HTTP.
+  #
+  # Antes se usaba el backend "native", que dejaba los .yml horneados en
+  # classpath:/config: cambiar una propiedad obligaba a recompilar y reiniciar, y
+  # no habia historial. Con el backend "git" se edita, se commitea y el cambio se
+  # sirve sin recompilar.
+  #
+  # Para apuntar al repo REMOTO de GitHub (privado) en vez del local, cambiar
+  # CONFIG_REPO_URI:
+  #   $env:CONFIG_REPO_URI = 'https://github.com/Kaylo777/colegio-config.git'
+  # El repositorio de configuracion del colegio esta publicado ahi.
+  #
+  # Si el repositorio esta vacio o no es alcanzable, fail-fast=false deja que el
+  # Config Server igual arranque, usando solo su configuracion local minima.
   cloud:
     config:
       server:
-        native:
-          search-locations: classpath:/config,optional:file:./config,optional:file:../config
+        git:
+          uri: ${CONFIG_REPO_URI:file:../config-repo}
+          default-label: main
+      fail-fast: false
 
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: http://${EUREKA_HOST:localhost}:8761/eureka/
     register-with-eureka: true
     fetch-registry: true
 

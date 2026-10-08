@@ -1,0 +1,47 @@
+# Configuracion del servicio de identidad.
+#
+# Este es el UNICO servicio que conoce las credenciales de los usuarios: valida el
+# login y firma los tokens. El gateway no las necesita porque no valida
+# contrasenas, y ningun otro servicio las necesita.
+server:
+  port: 8100
+
+spring:
+  application:
+    name: auth-service
+
+# Puerto de management separado del de la API. Va en otra cola de conexiones para
+# que las consultas de salud (Eureka, Spring Boot Admin, probes de Docker) no
+# compitan con el trafico de negocio.
+#
+# La exposicion se acota a endpoints no sensibles: /actuator/env, /actuator/beans
+# o /actuator/configprops pueden filtrar credenciales y propiedades internas, y
+# este servicio no tiene Spring Security que las proteja. Es la proteccion que
+# reemplaza a la que antes daba la seguridad por servicio.
+management:
+  server:
+    port: 9110
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+app:
+  security:
+    # Usuarios que pueden iniciar sesion. Las contrasenas estan hasheadas con
+    # BCrypt ({bcrypt}...) y las decodifica PasswordEncoderFactories, asi que
+    # nunca se comparan ni se guardan en texto plano.
+    #   USER  -> solo lectura (GET)
+    #   ADMIN -> lectura y escritura (POST, PUT, DELETE) + endpoints actuator
+    users:
+      admin:
+        # admin123
+        password: "{bcrypt}$2a$10$gZparbUDffZ1pKvmIM9gleYKE829oQYSoVK4kv75DS5BjfGcF.axu"
+        roles: [ ADMIN ]
+      user:
+        # user123
+        password: "{bcrypt}$2a$10$IOP08FQtJZ/8SFAgL0sSeeKQSdwOSFEJL8tqy46aotbNCgU0y1832"
+        roles: [ USER ]

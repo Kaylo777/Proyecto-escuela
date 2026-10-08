@@ -1,7 +1,31 @@
+# ==============================================================================
+# Stack completo de colegio-jwt (Spring Cloud + Angular).
+#
+#   docker compose build   -> construye las 8 imagenes (7 servicios + frontend)
+#   docker compose up -d   -> levanta todo
+#
+# Orden de arranque (dependencias con healthcheck):
+#   rabbitmq -> registry -> config-server -> auth/alumnos/administracion/gateway
+#   gateways -> admin-server y frontend
+#
+# Accesos:
+#   Frontend    http://localhost:4200   (admin/admin123, user/user123)
+#   Gateway     http://localhost:8080   (punto unico de entrada de la API)
+#   Eureka      http://localhost:8761
+#   Config      http://localhost:8888   (propertySources de cada servicio)
+#   Admin       http://localhost:9090   (admin/admin123)
+#   RabbitMQ    http://localhost:15672  (guest/guest)
+#
+# El Config Server toma la configuracion del repositorio Git local config-repo/
+# (montado de solo lectura). Para apuntar a un repo remoto, definir la variable
+# CONFIG_REPO_URI antes de levantar (ver backend/config-server/application.yml).
+# ==============================================================================
+
 services:
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: rabbitmq-microservicios
+    container_name: colegio-rabbitmq
+    restart: unless-stopped
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -12,9 +36,223 @@ services:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 20s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend
+
+  registry:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: registry
+    container_name: colegio-registry
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8761/actuator/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 20s
+    networks:
+      - backend
+
+  config-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: config-server
+    container_name: colegio-config-server
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    environment:
+      EUREKA_HOST: registry
+      CONFIG_REPO_URI: file:///config-repo
+    volumes:
+      - ./config-repo:/config-repo
+    depends_on:
+      registry:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8888/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - backend
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: auth-service
+    container_name: colegio-auth-service
+    restart: unless-stopped
+    ports:
+      - "8100:8100"
+      - "9110:9110"
+    environment:
+      EUREKA_HOST: registry
+      CONFIG_SERVER_HOST: config-server
+    depends_on:
+      config-server:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9110/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend
+
+  alumnos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: alumnos
+    container_name: colegio-alumnos
+    restart: unless-stopped
+    ports:
+      - "8101:8101"
+      - "9111:9111"
+    environment:
+      EUREKA_HOST: registry
+      CONFIG_SERVER_HOST: config-server
+      RABBITMQ_HOST: rabbitmq
+    volumes:
+      - alumnos-data:/app/data
+    depends_on:
+      config-server:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9111/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend
+
+  administracion:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: administracion
+    container_name: colegio-administracion
+    restart: unless-stopped
+    ports:
+      - "8102:8102"
+      - "9112:9112"
+    environment:
+      EUREKA_HOST: registry
+      CONFIG_SERVER_HOST: config-server
+      RABBITMQ_HOST: rabbitmq
+    volumes:
+      - administracion-data:/app/data
+    depends_on:
+      config-server:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9112/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: gateway
+    container_name: colegio-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_HOST: registry
+      CONFIG_SERVER_HOST: config-server
+    depends_on:
+      config-server:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend
+
+  admin-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: admin-server
+    container_name: colegio-admin-server
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    environment:
+      EUREKA_HOST: registry
+    depends_on:
+      registry:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    healthcheck:
+      # El panel lleva Spring Security (admin/admin123), por eso el probe usa Basic.
+      test: ["CMD", "wget", "-qO-", "--user=admin", "--password=admin123", "http://127.0.0.1:9090/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: colegio-frontend
+    restart: unless-stopped
+    ports:
+      - "4200:80"
+    depends_on:
+      gateway:
+        condition: service_started
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
 
 volumes:
   rabbitmq-data:
+  alumnos-data:
+  administracion-data:

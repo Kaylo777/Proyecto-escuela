@@ -1,0 +1,18 @@
+# Configuracion PROPIA del servicio (lo que no viene del Config Server).
+#
+# El nombre, el puerto y el cliente de Eureka son locales: el resto (secretos de
+# firma, token de servicio, usuarios) llega del Config Server.
+#
+# spring.config.import es lo que hace que este servicio sea cliente del Config
+# Server. Sin esa linea, arranca sin configuracion y falla.
+server:
+  port: 8100
+
+spring:
+  application:
+    name: auth-service
+  config:
+    import: "optional:configserver:http://${CONFIG_SERVER_HOST:localhost}:8888"
+  cloud:
+    config:
+      fail-fast: false

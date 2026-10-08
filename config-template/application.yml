@@ -1,0 +1,89 @@
+# Configuracion compartida por TODOS los microservicios.
+#
+# Este archivo NO se copia dentro del jar del Config Server: vive en el repositorio
+# Git externo (config-repo) y el Config Server lo sirve por HTTP con el backend
+# "git". Se edita, se commitea y el cambio se refleja sin recompilar.
+#
+# Como se levanta el repositorio: .\iniciar-config-repo.ps1 (idempotente).
+
+# ---------------------------------------------------------------------------
+# Token de servicio: la credencial entre el gateway y los microservicios
+# ---------------------------------------------------------------------------
+# El gateway lo agrega a cada peticion que reenvia (cabecera X-Service-Token) y
+# los microservicios lo exigen. Como los microservicios de negocio ya no validan
+# el JWT del usuario, esta cabecera es lo UNICO que prueba que una peticion paso
+# por el gateway: entrar directo a localhost:8101 con Postman devuelve 403.
+#
+# Solo el gateway y los servicios conocen este valor. En produccion se usaria un
+# cofre de secretos (Vault, AWS Secrets Manager) o mTLS; acao alcanza para
+# mostrar el patron.
+app:
+  service-token:
+    value: "bjVTzQ28dPcdlCLBU+qtKQTauTCViQFGo/aw1KVXbuM="
+
+  # Secretos de firma de los tokens. Los emite el auth-service y los valida el
+  # gateway. Ambos los leen de aca, asi que jamas estan en el codigo.
+  jwt:
+    # Secreto de firma de los ACCESS tokens (HS256). Minimo 32 caracteres.
+    secret: clave-de-firma-access-token-colegio-microservicios-2026-seguro
+    # Secreto DISTINTO para los refresh tokens. Gracias a esto un refresh token
+    # no puede usarse como access token (y al reves) porque cada tipo se firma
+    # con una clave diferente.
+    refresh-secret: clave-de-firma-refresh-token-colegio-microservicios-2026-seguro
+    # Emisor del token: el gateway lo exige al validar, asi que un token firmado
+    # por otra aplicacion es rechazado.
+    issuer: colegio-microservicios
+    # Access token: 15 minutos (900000 ms).
+    expiration: 900000
+    # Refresh token: 8 horas (28800000 ms).
+    refresh-expiration: 28800000
+
+  security:
+    # Cuenta de solo monitoreo (Spring Boot Admin). Permite leer /actuator/** por
+    # HTTP Basic. La contrasena esta en BCrypt, nunca en texto plano.
+    monitoring:
+      username: monitor
+      password: "{bcrypt}$2a$10$bp3Rl8zJX0JTIDGf9qy0L.zP9Mx0HjmmXAoQUggKKjui60LLB/KzO"
+      roles: [ ADMIN ]
+
+spring:
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: 5672
+    username: guest
+    password: guest
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_HOST:localhost}:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    instance-id: ${spring.application.name}:${random.value}
+    # Registrar la IP en vez del hostname. Sin esto, Eureka publica el nombre del
+    # equipo (p.ej. KAYLO777.mshome.net) y el load balancer del gateway no lo
+    # resuelve: falla con NXDOMAIN y todo /api/** responde 500.
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,env,beans,configprops,loggers,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# Los microservicios de negocio ya no tienen Spring Security, asi que su filtro de
+# token de servicio exime /actuator/** para que Spring Boot Admin y los Eureka
+# probes puedan consultarlo (ellos no conocen el secreto de servicio). La
+# proteccion de los endpoints sensibles (env, beans, configprops, loggers) es la
+# exposicion acotada: cada servicio solo expone health, info y metrics. Los
+# servicios que llevan Basic (gateway, config-server, admin-server) mantienen su
+# propia proteccion y pueden seguir usando su puerto principal.
+#
+# El puerto se define por servicio en cada archivo, porque debe ser distinto:
+#   auth-service     -> 9110
+#   alumnos          -> 9111
+#   administracion   -> 9112

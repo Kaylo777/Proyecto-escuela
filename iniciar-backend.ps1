@@ -21,6 +21,27 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 Write-Host "Levantando backend. Requiere RabbitMQ activo:  docker compose up -d" -ForegroundColor Yellow
 
+# El Config Server usa el backend "git": necesita que exista el repositorio de
+# configuracion. Se crea o se sincroniza antes de arrancar nada, porque sin el los
+# servicios caen en los valores de respaldo de su application.yml y arrancan sin
+# secretos ni token de servicio.
+$scriptConfigRepo = Join-Path $root 'iniciar-config-repo.ps1'
+if (Test-Path -LiteralPath $scriptConfigRepo) {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $scriptConfigRepo | Out-Null
+}
+
+# El backend "git" del Config Server necesita una URI absoluta al repositorio:
+# JGit no resuelve bien rutas relativas con espacios ("Default Project"), y la
+# carpeta de trabajo del proceso no es necesariamente la del proyecto. Se calcula
+# aca con la ruta real y se pasa por variable de entorno.
+#
+# Para usar un repositorio remoto de GitHub en vez del local, asignar antes:
+#   $env:CONFIG_REPO_URI = 'https://github.com/usuario/escuela-config.git'
+if (-not $env:CONFIG_REPO_URI) {
+    $rutaRepo = (Join-Path $root 'config-repo') -replace '\\', '/'
+    $env:CONFIG_REPO_URI = 'file:///' + ($rutaRepo -replace ' ', '%20')
+}
+
 # Java 17 o superior es obligatorio (Spring Boot 4). Se avisa temprano en lugar de
 # dejar que Maven fallen con un error de class file version.
 # "java -version" escribe en stderr: con $ErrorActionPreference='Stop' eso seria un
@@ -81,6 +102,7 @@ foreach ($s in $orden) {
 # puerto: sin esto, el gateway puede arrancar antes de que alumnos este
 # registrado en Eureka y las primeras llamadas a lb://alumnos fallan.
 foreach ($s in @(
+    @{ nombre = 'auth-service';   jar = 'auth-service-0.0.1-SNAPSHOT.jar';   puerto = 8100 },
     @{ nombre = 'alumnos';        jar = 'alumnos-0.0.1-SNAPSHOT.jar';        puerto = 8101 },
     @{ nombre = 'administracion'; jar = 'administracion-0.0.1-SNAPSHOT.jar'; puerto = 8102 },
     @{ nombre = 'gateway';        jar = 'gateway-0.0.1-SNAPSHOT.jar';        puerto = 8080 },
@@ -95,9 +117,12 @@ foreach ($s in @(
 Write-Host ""
 Write-Host "URLs:"
 Write-Host "  Eureka (Registry):  http://localhost:8761"
-Write-Host "  Config Server:      http://localhost:8888" 
+Write-Host "  Config Server:      http://localhost:8888"
 Write-Host "  API Gateway:        http://localhost:8080"
-Write-Host "  Alumnos directo:    http://localhost:8101/api/alumnos"
+Write-Host "  Auth Service:       http://localhost:8100"
 Write-Host "  RabbitMQ UI:        http://localhost:15672  (guest/guest)"
 Write-Host "  Spring Boot Admin:  http://localhost:9090"
+Write-Host ""
+Write-Host "  Alumnos y administracion NO aceptan acceso directo: exigen el token de"
+Write-Host "  servicio. Solo se acceden a traves del gateway (puerto 8080)."
 Write-Host "Logs en: backend\logs"

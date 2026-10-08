@@ -1,12 +1,14 @@
 package com.example.administracion.controller;
 
-import com.example.administracion.model.Docente;
+import com.example.administracion.dto.DocenteRequest;
+import com.example.administracion.dto.DocenteResponse;
 import com.example.administracion.rabbit.DocentePublisher;
 import com.example.administracion.repository.DocenteRepository;
+import com.example.administracion.service.DocenteMapper;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,11 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * CRUD de docentes. El token JWT llega validado desde el gateway y tambien se
- * valida aqui (resource server).
+ * CRUD de docentes.
  *
- * <p>Los @PreAuthorize son el segundo nivel de defensa: aunque las reglas de
- * URL de SecurityConfig se relajasen por error, el metodo seguiria protegido.</p>
+ * <p>No tiene seguridad ni reglas de negocio, por diseno: la autorizacion la
+ * aplica el gateway antes de que la peticion llegue aca, y la conversion entre
+ * entidad y DTO la hace DocenteMapper.</p>
  */
 @RestController
 @RequestMapping("/api/administracion")
@@ -39,45 +41,45 @@ public class DocenteController {
     }
 
     @GetMapping
-    public List<Docente> listar() {
-        return repository.findAll(Sort.by(Sort.Direction.ASC, "id"));
+    public List<DocenteResponse> listar() {
+        return DocenteMapper.toResponseList(
+                repository.findAll(Sort.by(Sort.Direction.ASC, "id")));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Docente> obtener(@PathVariable Long id) {
+    public ResponseEntity<DocenteResponse> obtener(@PathVariable Long id) {
         return repository.findById(id)
+                .map(DocenteMapper::toResponse)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('ADMIN')")
-    public Docente crear(@RequestBody Docente docente) {
-        Docente guardado = repository.save(docente);
+    public DocenteResponse crear(@Valid @RequestBody DocenteRequest request) {
+        var guardado = repository.save(DocenteMapper.toEntity(request));
         publisher.publicarDocenteCreado(guardado);
-        return guardado;
+        return DocenteMapper.toResponse(guardado);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Docente> actualizar(@PathVariable Long id, @RequestBody Docente datos) {
-        return repository.findById(id).map(existente -> {
-            existente.setNombre(datos.getNombre());
-            existente.setApellido(datos.getApellido());
-            existente.setEmail(datos.getEmail());
-            existente.setEspecialidad(datos.getEspecialidad());
-            return ResponseEntity.ok(repository.save(existente));
-        }).orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<DocenteResponse> actualizar(@PathVariable Long id,
+                                                       @Valid @RequestBody DocenteRequest request) {
+        return repository.findById(id)
+                .map(existente -> {
+                    DocenteMapper.actualizar(existente, request);
+                    return DocenteMapper.toResponse(repository.save(existente));
+                })
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
-        if (repository.existsById(id)) {
-            repository.deleteById(id);
-            return ResponseEntity.noContent().build();
+        if (!repository.existsById(id)) {
+            return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.notFound().build();
+        repository.deleteById(id);
+        return ResponseEntity.noContent().build();
     }
 }

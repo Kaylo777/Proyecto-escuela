@@ -1,0 +1,11 @@
+.git
+.gitignore
+**/target/
+**/node_modules/
+frontend/
+config-repo/
+logs/
+*.log
+.idea/
+.vscode/
+data/

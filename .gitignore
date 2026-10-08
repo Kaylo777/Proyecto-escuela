@@ -10,6 +10,11 @@ frontend/.angular
 # Bases de datos locales (H2)
 data/
 
+# Repositorio Git de configuracion (lo crea iniciar-config-repo.ps1).
+# Es un repositorio Git independiente, con su propio historial, asi que NO se
+# versiona aca. La plantilla que sí se versiona esta en config-template/.
+config-repo/
+
 # Logs
 *.log
 *.err

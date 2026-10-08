@@ -1,12 +1,13 @@
 # Colegio — Spring Security + JWT sobre Spring Cloud
 
 Trabajo de investigación e implementación de **Spring Security y JWT** integrados en una
-arquitectura de **Spring Cloud**, con un frontend **Angular** opcional que incluye login.
+arquitectura de **Spring Cloud**, con un frontend **Angular** que incluye login.
 
 El sistema es una aplicación de gestión escolar: microservicios de `alumnos` y
 `administracion` (docentes), protegidos por un **API Gateway** que autentica y autoriza
-por roles, sobre **Eureka** (registro) y **Config Server** (configuración centralizada),
-con **RabbitMQ** para el intercambio de eventos entre servicios.
+por roles, sobre **Eureka** (registro) y **Config Server** (configuración centralizada en
+un repositorio Git remoto), con **RabbitMQ** para el intercambio de eventos entre
+servicios y **Spring Boot Admin** para monitoreo.
 
 ---
 
@@ -19,38 +20,45 @@ con **RabbitMQ** para el intercambio de eventos entre servicios.
                                │  Authorization: Bearer <accessToken>
                                ▼
                         ┌──────────────┐
-                        │ API Gateway  │  :8080   ← único punto de entrada público
-                        │  autentica   │           valida el token y aplica el rol
-                        │  autoriza   │
+                        │ API Gateway  │  :8080  ← único punto de entrada público
+                        │ valida token │         autoriza por rol y reenvía con
+                        │ autoriza     │         X-Service-Token
                         └──────┬───────┘
-                               │  balanceo de carga lb://
-                 ┌─────────────┴─────────────┐
-                 ▼                           ▼
-        ┌──────────────────┐        ┌────────────────────┐
-        │  Microservicio   │        │   Microservicio    │
-        │    alumnos       │ :8101  │  administracion    │ :8102
-        │  resource server │        │   resource server  │
-        └────────┬─────────┘        └─────────┬──────────┘
-                 │  alumnus.creado / docente.creado
-                 └────────────┬───────────────┘
-                              ▼
-                     ┌─────────────────┐
-                     │    RabbitMQ     │  :5672  (UI :15672)
-                     └─────────────────┘
+                               │  lb://  (Spring Cloud LoadBalancer + Eureka)
+                 ┌─────────────┴─────────────┬────────────────┐
+                 ▼                           ▼                ▼
+        ┌──────────────────┐      ┌──────────────────┐   ┌─────────────────┐
+        │   auth-service   │      │    alumnos       │   │ administracion  │
+        │    identidad     │      │   :8101 (H2)     │   │  :8102 (H2)     │
+        │ login + emite    │      │  exige token     │   │  exige token    │
+        │ y renueva tokens │      │  de servicio     │   │  de servicio    │
+        └──────────────────┘      └────────┬─────────┘   └────────┬────────┘
+                                           │ evento    evento     │
+                                           └───────────┬───────────┘
+                                                       ▼
+                                               ┌──────────────┐
+                                               │  RabbitMQ    │  :5672 (UI :15672)
+                                               └──────────────┘
 
-        Eureka :8761   ·   Config Server :8888   ·   Spring Boot Admin :9090
+        Eureka :8761 · Config Server :8888 · Spring Boot Admin :9090
 ```
 
-| Servicio | Puerto | Rol |
-|---|---|---|
-| `gateway` | 8080 | Autentica, emite tokens, autoriza por rol, enruta |
-| `alumnos` | 8101 | CRUD de alumnos (H2), publica `alumno.creado` |
-| `administracion` | 8102 | CRUD de docentes (H2), publica `docente.creado` |
-| `registry` | 8761 | Eureka: registro y descubrimiento de servicios |
-| `config-server` | 8888 | Configuración centralizada de todos los servicios |
-| `admin-server` | 9090 | Spring Boot Admin: métricas y estado |
-| RabbitMQ | 5672 / 15672 | Bus de eventos entre microservicios |
-| Angular | 4200 | Frontend con login |
+| Servicio | Puerto | Management | Rol |
+|---|---|---|---|
+| `gateway` | 8080 | — | Único punto público: valida el JWT, autoriza por rol, agrega `X-Service-Token`, enruta |
+| `auth-service` | 8100 | 9110 | Identidad: login, emisión y renovación de tokens (SSO) |
+| `alumnos` | 8101 | 9111 | CRUD de alumnos (H2), publica `alumno.creado` |
+| `administracion` | 8102 | 9112 | CRUD de docentes (H2), publica `docente.creado` |
+| `registry` | 8761 | — | Eureka: registro y descubrimiento de servicios |
+| `config-server` | 8888 | — | Configuración centralizada (backend Git) |
+| `admin-server` | 9090 | — | Spring Boot Admin: métricas y estado |
+| RabbitMQ | 5672 / 15672 | — | Bus de eventos entre microservicios |
+| Angular | 4200 | — | Frontend con login |
+
+Los puertos de *management* son **separados de los de la API** (9110/9111/9112): las
+consultas de salud (Eureka, Spring Boot Admin, probes de Docker) no compiten con el
+tráfico de negocio, y la exposición de actuator se **acota a `health, info, metrics`**
+para no filtrar `env`, `beans` ni `configprops`.
 
 ### Stack
 
@@ -62,16 +70,18 @@ con **RabbitMQ** para el intercambio de eventos entre servicios.
 | Frontend | Angular | 22.1 |
 | Base de datos | H2 (archivo) | — |
 | Mensajería | RabbitMQ | 3.x (Docker) |
-| Build | Maven Wrapper | 3.9.16 |
+| Build | Maven | 3.9 (wrapper por servicio y agregador en la raíz) |
+| Contenedores | Docker / Compose | multi-stage, 8 imágenes |
 
 ---
 
 ## 2. Requisitos
 
-- **Java 17 o superior** (obligatorio: Spring Boot 4 no compila con Java 11)
+- **Java 17 o superior** (Spring Boot 4 no compila con Java 11)
 - **Node.js 20+** y npm (solo para el frontend)
-- **Docker Desktop** (opcional, solo para RabbitMQ)
-- **Maven** — no hace falta instalarlo, cada servicio incluye su `mvnw.cmd`
+- **Docker Desktop** — para RabbitMQ o para levantar el stack completo con `docker compose`
+- **Maven** — no hace falta instalarlo: se usa el `mvnw.cmd`
+- **Git** — para el repositorio de configuración
 
 ```powershell
 java -version     # debe decir 17 o superior
@@ -82,72 +92,82 @@ docker --version  # opcional
 
 ## 3. Cómo ejecutarlo
 
-### 3.1 Compilar el backend
+### 3.1 Todo el stack con Docker (recomendado)
 
-Cada microservicio se compila por separado. Desde la raíz:
-
-```powershell
-$env:JAVA_HOME = "C:\ruta\a\jdk-21"
-cd backend\registry      ; .\mvnw.cmd -DskipTests package
-cd ..\config-server      ; .\mvnw.cmd -DskipTests package
-cd ..\alumnos            ; .\mvnw.cmd -DskipTests package
-cd ..\administracion     ; .\mvnw.cmd -DskipTests package
-cd ..\gateway            ; .\mvnw.cmd -DskipTests package
-cd ..\admin-server       ; .\mvnw.cmd -DskipTests package
-```
-
-O en un bucle:
+Desde la raíz del proyecto:
 
 ```powershell
-cd backend
-foreach ($s in @('registry','config-server','alumnos','administracion','gateway','admin-server')) {
-    Push-Location $s ; & ".\mvnw.cmd" -DskipTests -q package ; Pop-Location
-}
+docker compose build      # construye las 8 imágenes (7 servicios + frontend)
+docker compose up -d      # levanta todo con los healthchecks y el orden correcto
 ```
 
-### 3.2 Compilar todo de una vez (con el POM agregador)
+Accesos:
 
-En la raíz hay un `pom.xml` agregador con los 6 microservicios como módulos, así que
-también alcanza con un solo comando:
+| Qué | Dónde | Credencial |
+|---|---|---|
+| Frontend (SPA con login) | http://localhost:4200 | `admin/admin123` o `user/user123` |
+| API Gateway | http://localhost:8080 | Bearer JWT |
+| Eureka | http://localhost:8761 | — |
+| Config Server | http://localhost:8888 | — |
+| Spring Boot Admin | http://localhost:9090 | `admin/admin123` |
+| RabbitMQ UI | http://localhost:15672 | `guest/guest` |
+
+Los microservicios de negocio también quedan publicados (8100/8101/8102 y 9110/9111/9112)
+para poder demostrar que **entrar directo a ellos con Postman devuelve 403**.
+
+Para bajar todo:
+
+```powershell
+docker compose down
+```
+
+> Dentro de Docker los servicios se corren solo en la red del compose (gateway, Eureka,
+> Config Server, RabbitMQ se ven por su nombre de contenedor) gracias a las variables
+> `EUREKA_HOST`, `CONFIG_SERVER_HOST` y `RABBITMQ_HOST` definidas en `docker-compose.yml`:
+> las mismas configs sirven local y en contenedores (los valores por defecto son
+> `localhost`).
+
+### 3.2 Sin Docker, por partes
+
+**Compilar el backend** (con el POM agregador, 7 módulos de una vez):
 
 ```powershell
 .\mvnw.cmd -DskipTests package
 ```
 
-El orden del reactor es `registry` → `config-server` → `alumnos` → `administracion` →
-`gateway` → `admin-server`. Tarda unos 15 segundos con las dependencias ya descargadas.
+O servicio por servicio con cada `mvnw.cmd` propio (es lo que usa `iniciar-backend.ps1`).
 
-Cada servicio sigue siendo autónomo y se puede compilar por separado (es lo que usa
-`iniciar-backend.ps1`), porque cada uno tiene su propio `pom.xml` y su propio `mvnw.cmd`.
-
-### 3.3 Levantar RabbitMQ (opcional)
+**Preparar el repositorio de configuración** (solo la primera vez, o cuando cambie la
+plantilla `config-template/`):
 
 ```powershell
-docker compose up -d
-docker ps     # debe aparecer rabbitmq-microservicios
+.\iniciar-config-repo.ps1
 ```
 
-Sin RabbitMQ los servicios **igual arrancan** y todo lo relativo a JWT y roles funciona
-igual; lo único que falla es `POST`/`PUT` de alumnos y docentes, porque el evento no se
-puede publicar (ver *Limitaciones conocidas*).
+Crea `config-repo/` (repo Git independiente) a partir de `config-template/`. En este
+repositorio vive TODA la configuración que sirve el Config Server (ver §7). El mismo
+repo está publicado en GitHub:
+`https://github.com/Kaylo777/colegio-config.git` (privado).
 
-### 3.4 Levantar el backend
+**Levantar RabbitMQ** (las operaciones de escritura lo necesitan):
+
+```powershell
+docker compose up -d rabbitmq
+```
+
+**Levantar el backend**:
 
 ```powershell
 .\iniciar-backend.ps1
 ```
 
-Arranca en orden: `registry` → `config-server` → `alumnos` → `administracion` →
-`gateway` → `admin-server`, **esperando a que cada puerto abra** antes de seguir.
-Los logs quedan en `backend\logs\`.
+Arranca en orden `registry` → `config-server` → `auth-service` → `alumnos` →
+`administracion` → `gateway` → `admin-server`, esperando a que cada puerto abra antes de
+seguir. Los logs quedan en `backend\logs\`.
 
-Para detener todo:
+Para detener todo: `.\detener-backend.ps1`.
 
-```powershell
-.\detener-backend.ps1
-```
-
-### 3.5 Levantar el frontend
+**Levantar el frontend**:
 
 ```powershell
 cd frontend
@@ -155,55 +175,44 @@ npm install
 npm start          # http://localhost:4200
 ```
 
-### 3.6 Trabajar en Eclipse
+### 3.3 Probar la API
 
-El backend se puede abrir completo desde Eclipse, sin importar servicio por servicio,
-porque la raíz tiene un POM agregador.
+Una batería de 41 verificaciones automatizadas contra el gateway (roles, tokens,
+token de servicio, DTOs, config, RabbitMQ):
 
-1. Abrí la carpeta raíz del proyecto en Eclipse.
-2. `File` → `New` → `Maven Project` → **Existing Maven Projects**.
-3. Seleccioná el `pom.xml` de la **raíz** (no las carpetas de cada servicio).
-4. Finish: aparecen los 6 microservicios como proyectos Maven.
-5. `Project` → `Update Maven Project` (Ctrl+Shift+O) para resolver dependencias.
+```powershell
+.\probar-api.ps1
+```
 
-Requisitos: JDK 17 o superior configurado en `Window` → `Preferences` → `Java` →
-`Installed JREs`.
+Con el stack sano termina en `Total: 41   Fallos: 0` (ver §9).
 
-Cada microservicio es un proyecto Maven independiente, así que también se puede hacer
-`Run As` → `Spring Boot App` sobre cualquiera de ellos. Para levantarlos todos con el
-orden y las esperas correctas conviene usar `.\iniciar-backend.ps1` desde PowerShell
-(usando los `target\*.jar` ya compilados), no desde Eclipse.
+### 3.4 Trabajar en Eclipse / VS Code
 
-Eclipse genera `.project`, `.classpath` y `.settings/`, que están en `.gitignore` a
-propósito: son específicos de cada máquina y si se commitean generan conflictos.
-
-### 3.7 Trabajar en Visual Studio Code
-
-El repo trae `.vscode/extensions.json` y `.vscode/settings.json` compartidos. Al abrir
-la carpeta en VS Code aparece una notificación para instalar:
-
-- **Extension Pack for Java** (incluye Maven for Java, que reconoce el POM agregador)
-- **Angular Language Service**, para el front
-
-En `.vscode/launch.json` se pueden agregar configuraciones de depuración para correr
-cada microservicio. El front se levanta desde la terminal integrada con `npm start`.
+El backend se importa completo gracias al POM agregador de la raíz (`File → New →
+Maven Project → Existing Maven Projects` seleccionando el `pom.xml` raíz). En VS Code el
+repo trae `.vscode/extensions.json` y `.vscode/settings.json` compartidos (Extension Pack
+for Java + Angular Language Service).
 
 ---
 
 ## 4. Usuarios de prueba
 
-Definidos en el Config Server (`backend\config-server\src\main\resources\config\gateway.yml`),
-con contraseñas hasheadas en **BCrypt** (`{bcrypt}...`); nunca en texto plano.
+Definidos en el repositorio de configuración (`auth-service.yml`), con contraseñas
+hasheadas en **BCrypt** (`{bcrypt}...`), nunca en texto plano. El **auth-service** es el
+único servicio que las conoce.
 
 | Usuario | Contraseña | Rol | Puede |
 |---|---|---|---|
-| `admin` | `admin123` | `ADMIN` | Leer **y** escribir, ver actuator |
+| `admin` | `admin123` | `ADMIN` | Leer **y** escribir (POST, PUT, DELETE) |
 | `user` | `user123` | `USER` | Solo leer (`GET`) |
-| `monitor` | `monitor123` | `ADMIN` | Cuenta de servicio, **solo** `/actuator/**` |
+| `monitor` | `monitor123` | `ADMIN` | Cuenta de monitoreo para Spring Boot Admin: solo `/actuator/**` |
 
 ---
 
 ## 5. Endpoints y matriz de roles
+
+La matriz se aplica **en el gateway** (el único autorizador). `USER` solo lee;
+`ADMIN` lee y escribe.
 
 | Endpoint | Sin token | `USER` | `ADMIN` |
 |---|---|---|---|
@@ -218,82 +227,114 @@ con contraseñas hasheadas en **BCrypt** (`{bcrypt}...`); nunca en texto plano.
 | `POST /api/administracion/docentes` | 401 | **403** | 200 |
 | `GET /actuator/health` | 200 | 200 | 200 |
 | `GET /actuator/env` | 401 | 401 | 200 (HTTP Basic `monitor`) |
-| cualquier otra ruta | 403 | 403 | 403 (`denyAll`) |
 
 ---
 
 ## 6. Cómo funciona la seguridad
 
-### 6.1 Login y emisión de tokens
+### 6.1 Separación: el gateway autoriza, el auth-service identifica
 
-```
-Usuario → POST /auth/login → Gateway
-                              ├─ valida usuario/contraseña contra BCrypt
-                              ├─ firma access token  (HS256, 15 min)
-                              └─ firma refresh token (HS256, 8 h)
-Angular ← guarda ambos en localStorage
-```
+Dos microservicios distintos (corrección 2 del docente: la seguridad no vive en el
+gateway):
 
-Después de cada login, Angular manda el access token en la cabecera
-`Authorization: Bearer <token>`.
+- **`auth-service`**: única entidad que conoce las credenciales. `POST /auth/login`
+  valida contra BCrypt, firma el **access token** (HS256, 15 min) y el **refresh token**
+  (HS256, 8 h), y los renueva con `POST /auth/refresh`.
+- **`gateway`**: valida la firma del token, aplica la matriz de roles y reenvía. No
+  conoce contraseñas ni emite tokens.
+
+Decodificando el token emitido se ve su contenido: `issuer=colegio-microservicios`,
+`sub=admin`, `roles=[ADMIN]`, `type=access`.
 
 ### 6.2 Dos secretos distintos
 
-`app.jwt.secret` firma los **access tokens** y `app.jwt.refresh-secret` firma los
-**refresh tokens**. Al usar claves diferentes, un refresh token no puede usarse como
-access token ni al revés: cada tipo solo valida contra su propia clave. Verificado en
-*Pruebas realizadas*.
+`app.jwt.secret` firma los **access tokens** y `app.jwt.refresh-secret` los **refresh
+tokens**. Al usar claves diferentes, un refresh token no puede usarse como access token
+ni al revés. Verificado en *Pruebas realizadas*.
 
-### 6.3 Defensa en profundidad: el gateway no es el único que valida
+### 6.3 Los microservicios ya no validan el JWT: token de servicio (correcciones 1 y 4)
 
-El gateway es el **autorizador**, pero los microservicios son **resource servers** que
-validan el mismo token por su cuenta, con el mismo secreto y el mismo emisor
-(`colegio-microservicios`). Esto evita que alguien esquive el gateway entrando
-directamente al puerto 8101/8102 con un token inválido, y también que un token emitido
-para otra aplicación sea aceptado.
+Los microservicios de negocio **no tienen Spring Security** ni validan el JWT (eso era
+"Spring Security por microservicio como si fueran monolitos", corrección 1). La
+confianza se resuelve con una cabecera interna:
 
-Hay además `@PreAuthorize("hasRole('ADMIN')")` en los controladores, como tercera capa.
+```
+gateway ──► X-Service-Token: <secreto> ──► alumnos / administracion
+```
 
-### 6.4 Renovación automática del token
+- El gateway **agrega** `X-Service-Token` a cada petición que reenvía.
+- `alumnos` y `administracion` corren un **filtro de token de servicio** (Spring Security
+  `OncePerRequestFilter` más liviano, sin JWT): si la cabecera no coincide, devuelven
+  **403**.
+- Entrar directo a `http://localhost:8101` o `:8102` con Postman devuelve 403: el único
+  que conoce el secreto (además de los servicios) es el gateway.
 
-`auth.interceptor.ts` (Angular):
+### 6.4 Aislamiento de la cuenta de monitoreo
 
-1. Si el access token ya venció, pide uno nuevo con el refresh token **antes** de enviar.
-2. Si la API responde 401, reintenta la petición una sola vez con el token renovado.
-3. Si el refresh también falla, cierra la sesión y vuelve al login.
+`monitor` vive en su propia cadena de seguridad y **solo sirve para leer los
+`/actuator/**` del gateway, config-server y admin-server** (HTTP Basic). No puede
+iniciar sesión en `/auth/login` ni obtener un token de usuario.
 
-### 6.5 Aislamiento de la cuenta de monitoreo
+En los microservicios de negocio, que no tienen Spring Security, la protección de
+actuator la da la **exposición acotada** (`health,info,metrics` en un puerto de
+management separado) — ver §7.
 
-`monitor` vive en un `authenticationManager` **separado** y en una cadena de seguridad
-**exclusiva de `/actuator/**`** (`@Order(1)` + `securityMatcher`). Consecuencias:
+### 6.5 Los controladores exponen DTOs, no entidades (corrección 5)
 
-- No se puede usar para iniciar sesión en `/auth/login` ni obtener un token de usuario.
-- Un `Authorization: Basic monitor:...` **no** autoriza nada fuera de `/actuator/**`.
+Los controladores reciben y devuelven **DTOs con validación Bean Validation**
+(`@NotBlank`, `@Email`, etc.), nunca la entidad JPA:
+
+- Inyectar un `id` en el cuerpo no redefine el recurso: se ignora (verificado en las
+  pruebas con *mass assignment*).
+- Un `POST` sin nombre o con email inválido devuelve **400** antes de tocar la base.
+
+### 6.6 Renovación automática del token (frontend)
+
+`auth.interceptor.ts` renueva el access token con el refresh cuando vence y reintenta la
+petición; si el refresh también falla, cierra la sesión. Ver: `frontend/src/app/`.
 
 ---
 
-## 7. Configuración centralizada
+## 7. Configuración centralizada (corrección 3)
 
-El Config Server (perfil `native`, `:8888`) sirve la configuración desde
-`backend\config-server\src\main\resources\config\`:
+El Config Server usa el **backend "git"**: la configuración NO está horneada en el jar,
+vive en un repositorio Git versionado y se sirve por HTTP.
+
+- Plantilla versionada: `config-template/` (fuente de verdad).
+- Repositorio local: `config-repo/` (repo Git independiente, se crea y sincroniza con
+  `.\iniciar-config-repo.ps1`).
+- Repositorio **remoto** (privado): `https://github.com/Kaylo777/colegio-config.git`,
+  donde el mismo `config-repo` está publicado.
 
 | Archivo | Contenido |
 |---|---|
-| `application.yml` | Secreto JWT, issuer, expiraciones, RabbitMQ, Eureka, actuator, cuenta `monitor` |
-| `gateway.yml` | Puerto, usuarios con BCrypt, rutas `lb://`, CORS |
-| `alumnos.yml` | Puerto 8101, datasource H2 |
-| `administracion.yml` | Puerto 8102, datasource H2 |
+| `application.yml` | Token de servicio, secretos JWT, issuer, expiraciones, RabbitMQ, Eureka, actuator, cuenta `monitor` |
+| `gateway.yml` | Puerto y rutas `lb://` (auth, alumnos, administracion) |
+| `auth-service.yml` | Puerto 8100, management 9110, usuarios con BCrypt |
+| `alumnos.yml` | Puerto 8101, management 9111, datasource H2 |
+| `administracion.yml` | Puerto 8102, management 9112, datasource H2 |
+
+Para apuntar al repositorio remoto en vez del local (cualquier servicio que así lo
+levante):
+
+```powershell
+$env:CONFIG_REPO_URI = 'https://github.com/Kaylo777/colegio-config.git'
+```
+
+Cambiar una propiedad = editar, commitear y el Config Server la sirve **sin recompilar**
+ni reiniciar. Los hosts (Eureka, Config Server, RabbitMQ) son resolubles por variable de
+entorno con default `localhost`, así el mismo repositorio funciona local y en Docker.
 
 Cada servicio lo importa con:
 
 ```yaml
 spring:
   config:
-    import: optional:configserver:http://localhost:8888
+    import: optional:configserver:http://${CONFIG_SERVER_HOST:localhost}:8888
 ```
 
-El prefijo `optional:` permite que un servicio arranque aunque el Config Server esté
-caído, usando los valores de respaldo de su `application.yml` local.
+El prefijo `optional:` permite arrancar aunque el Config Server esté caído, usando los
+valores de respaldo del `application.yml` local.
 
 ---
 
@@ -307,105 +348,50 @@ caído, usando los valores de respaldo de su `application.yml` local.
 | Payload | `EventoNotificacion(String tipo, Long id, String detalle)` |
 
 Flujo: `alumnos` crea un alumno → publica `alumno.creado` → `administracion` lo recibe en
-su listener. La conversión del mensaje usa `Jackson2JsonMessageConverter`.
-
-Verificado en ejecución (ver *Pruebas realizadas*): al crear un alumno por la API,
-`alumnos` publica el evento y `administracion` lo recibe, y al revés al crear un docente.
+su listener (y al revés con `docente.creado`). La conversión usa
+`Jackson2JsonMessageConverter`. Verificado en ejecución por `probar-api.ps1`.
 
 ---
 
 ## 9. Pruebas realizadas
 
-Levantado el stack completo (con RabbitMQ), se ejecutó esta matriz contra el gateway.
-**Todas las pruebas pasaron.**
+Existe una batería automatizada, `probar-api.ps1`, de **41 verificaciones** que se ejecuta
+contra el stack levantado (local o Docker) y termina en `Total: 41   Fallos: 0`.
 
-### Seguridad y roles
+La batería cubre:
 
-| # | Prueba | Esperado | Resultado |
-|---|---|---|---|
-| 1 | `POST /auth/login` admin/admin123 | 200 + token 900s | OK |
-| 2 | `POST /auth/login` user/user123 | 200 + rol `USER` | OK |
-| 3 | `POST /auth/login` contraseña incorrecta | 401 | OK |
-| 4 | `GET /auth/me` con token | 200 | OK |
-| 5 | `GET /auth/me` sin token | 401 | OK |
-| 6 | `GET /api/alumnos` con admin | 200 | OK |
-| 7 | `GET /api/alumnos` con user | 200 | OK |
-| 8 | `GET /api/alumnos` sin token | 401 | OK |
-| 9 | `POST /api/alumnos` con user | 403 | OK |
-| 10 | `POST /api/alumnos` sin token | 401 | OK |
-| 11 | `GET /actuator/health` sin token | 200 | OK |
-| 12 | `GET /actuator/env` Basic `monitor` correcto | 200 | OK |
-| 13 | `GET /actuator/env` Basic `monitor` incorrecto | 401 | OK |
-| 14 | `GET /actuator/env` sin credencial | 401 | OK |
-| 15 | Basic `monitor` sobre `/api/alumnos` | 401 | OK |
-| 16 | `POST /auth/refresh` token inválido | 401 | OK |
-| 17 | Refresh token usado como Bearer en `/api` | 401 | OK |
-| 18 | Access token usado en `/auth/refresh` | 401 | OK |
-| 19 | `POST /auth/refresh` con refresh válido | 200 + token nuevo | OK |
-| 20 | Ruta inexistente con token válido | 403 | OK |
+| Sección | Qué valida |
+|---|---|
+| Login y perfiles | login admin/user, error 401, `/auth/me`, refresh (token válido/inválido, uso cruzado de tipos) |
+| Matriz de roles | la aplica el gateway: `USER` no escribe, sin token no hay nada |
+| Token de servicio | 403 directo a 8100/8101/8102 sin cabecera, 200 con el secreto, el `Authorization` del cliente no sirve directo |
+| Cuenta `monitor` | health público, `/actuator/env` con/sin Basic, monitor no alcanza para `/api` |
+| DTOs | `@NotBlank`, email inválido, mass assignment (el `id` del cuerpo se ignora) |
+| Config | la sirve el backend git del Config Server (origen = `config-repo`), trae `app.service-token.value` y `app.jwt.secret` |
+| RabbitMQ | evento `alumno.creado` recibido por `administracion` y `docente.creado` por `alumnos` |
 
-Las pruebas 17 y 18 son las que confirman que los dos secretos separadas cumplen su
-función: un token de un tipo no sirve como credencial del otro.
-
-### Bypass del gateway
-
-| # | Prueba | Esperado | Resultado |
-|---|---|---|---|
-| 21 | `POST` directo a `:8101` con user | 403 | OK |
-| 22 | `GET` directo a `:8101` con user | 200 | OK |
-| 23 | `GET` directo a `:8101` sin token | 401 | OK |
-
-Estas tres son las más importantes del trabajo: confirman que **saltarse el gateway no
-sirve**, porque el microservicio revalida el token por su cuenta.
-
-### CRUD y mensajería
-
-| # | Prueba | Esperado | Resultado |
-|---|---|---|---|
-| 24 | `POST /api/alumnos` con admin | 201 | OK |
-| 25 | `POST /api/administracion` con admin | 201 | OK |
-| 26 | `GET /api/administracion` con admin / user | 200 | OK |
-| 27 | Evento `alumno.creado` publicado por `alumnos` | publicado | OK |
-| 28 | Evento `alumno.creado` recibido por `administracion` | recibido | OK |
-| 29 | Evento `docente.creado` publicado por `administracion` | publicado | OK |
-| 30 | Evento `docente.creado` recibido por `alumnos` | recibido | OK |
-
-Topología confirmada en el broker: exchange `microservicios.exchange` (topic) con las
-colas `microservicios.cola.alumnos` y `microservicios.cola.administracion`, un consumidor
-activo en cada una, y los bindings `alumno.*` y `docente.*`.
-
-Además se verificó que los tres hashes BCrypt de la configuración
-(`admin123`, `user123`, `monitor123`) corresponden realmente a esas contraseñas, y que
-el frontend compila (`ng build`) y sirve (`ng serve` → 200 en `/` y `/main.js`).
+Además se verifica que el jar embebido no dependa de archivos externos para las pruebas
+y que el frontend compila (`ng build`) y sirve.
 
 ---
 
 ## 10. Limitaciones conocidas
 
-Puntos a tener en cuenta, asumidos conscientemente para este trabajo:
-
-1. **Sin Docker, `POST`/`PUT` devuelven 500.** El evento se publica de forma síncrona y
-   si RabbitMQ no está, `AmqpConnectException` corta la respuesta. El `GET` y toda la
-   parte de JWT funcionan igual. Con `docker compose up -d` se resuelve (es lo que
-   happens con el stack completo, ver *Pruebas realizadas*). En producción el patrón
-   correcto sería una *outbox* transaccional.
-2. **Los refresh tokens no se revocan.** Son JWT sin estado: si uno se filtra, sirve
-   hasta 8 horas. En producción harían falta tokens opacos guardados en base de datos
-   con rotación y revocación explícita.
-3. **Los tokens viven en `localStorage`**, legible desde JavaScript. La alternativa
-   sería una cookie `httpOnly`, que obliga a trabajar con protección CSRF.
-4. **CORS abierto a cualquier origen** (`*`). Aceptable para una API con token Bearer,
-   pero en producción se restringe a los orígenes del front.
-5. **Secreto JWT compartido por los microservicios.** Si uno se compromete, se pueden
-   firmar tokens para todos. La alternativa es un par de claves por servicio (RS256 con
-   `kid`) y validación de *audience*.
-6. **Los puertos 8101/8102 están expuestos.** Están protegidos, pero en producción
-   irían detrás del gateway en una red interna.
-7. **Usuarios en configuración, no en base de datos.** Es un dato de partida fijo.
-8. **`eureka.instance.prefer-ip-address: true`.** Sin esto, Eureka publicaba el nombre
-   del equipo (por ejemplo `KAYLO777.mshome.net`), el load balancer del gateway no lo
-   resolvía y todo `/api/**` respondía 500 con    `NXDOMAIN`. Se registra la IP para evitarlo,
-   y de paso que un adaptador virtual (WSL, Docker, Hyper-V) no sea elegido por error.
+1. **Los refresh tokens no se revocan.** Son JWT sin estado: si uno se filtra, sirve
+   hasta 8 horas. En producción harían falta tokens opacos con rotación y revocación.
+2. **Los tokens viven en `localStorage`** (legible desde JS). La alternativa sería una
+   cookie `httpOnly` con protección CSRF.
+3. **CORS abierto** (`*`). Aceptable para una API con Bearer; en producción se restringe
+   a los orígenes del front.
+4. **Secreto JWT compartido.** Si un servicio se compromete, puede firmar tokens. La
+   alternativa es RS256 por servicio con `kid` y *audience*.
+5. **Usuarios en configuración, no en BD.** Es un dato de partida fijo del trabajo.
+6. **`prefer-ip-address: true`.** Eureka registra la IP del contenedor/equipo. Dentro de
+   Docker esas IPs son de la red interna del compose (correcto para SBA y el load
+   balancer), pero no se navegan desde el host por su IP.
+7. **El repositorio de configuración es privado.** Para que otra persona corra el
+   proyecto "en modo remoto" debe tener acceso a `colegio-config`; la alternativa
+   local (montar/`config-repo`) funciona sin credenciales.
 
 ---
 
@@ -413,29 +399,50 @@ Puntos a tener en cuenta, asumidos conscientemente para este trabajo:
 
 ```
 colegio-jwt/
-├── pom.xml                   POM agregador: compila los 6 microservicios juntos
+├── pom.xml                   POM agregador: compila los 7 microservicios juntos
+├── Dockerfile                Imagenes de los 7 microservicios (multi-stage)
+├── docker-compose.yml        Stack completo: 7 servicios + rabbitmq + frontend
+├── .dockerignore / frontend/.dockerignore
+├── config-template/          Plantilla de configuracion (fuente de verdad)
+├── config-repo/              Repo Git local servido por el Config Server (.gitignore)
 ├── backend/
-│   ├── gateway/            API Gateway: login, JWT, roles, rutas
-│   ├── alumnos/            Microservicio de alumnos
-│   ├── administracion/     Microservicio de docentes
-│   ├── registry/           Eureka
-│   ├── config-server/      Configuración centralizada (+ archivos en resources/config)
-│   └── admin-server/       Spring Boot Admin
-├── frontend/               Angular: login, alumnos, docentes, panel de seguridad
-├── .vscode/                Configuración compartida de Visual Studio Code
-├── iniciar-backend.ps1     Levanta los 6 servicios en orden, esperando cada puerto
-├── detener-backend.ps1     Detiene todo
-├── docker-compose.yml      RabbitMQ
+│   ├── gateway/              API Gateway: valida JWT, autoriza, agrega X-Service-Token
+│   ├── auth-service/         Identidad: login, emision y renovacion de tokens
+│   ├── alumnos/              Microservicio de alumnos (DTOs + ServiceTokenFilter)
+│   ├── administracion/       Microservicio de docentes (DTOs + ServiceTokenFilter)
+│   ├── registry/             Eureka
+│   ├── config-server/        Config Server (backend git)
+│   └── admin-server/         Spring Boot Admin
+├── frontend/                 Angular (login, alumnos, docentes, guards, interceptor)
+│   ├── Dockerfile            Build Node + nginx (SPA + proxy /api y /auth)
+│   └── nginx.conf
+├── iniciar-backend.ps1       Levanta los 7 servicios en orden, esperando cada puerto
+├── detener-backend.ps1       Detiene todo
+├── iniciar-config-repo.ps1   Crea/sincroniza config-repo desde config-template
+├── probar-api.ps1            Bateria de 41 verificaciones de la API
 └── README.md
 ```
 
 ---
 
-## 12. Correspondencia con el enunciado
+## 12. Correspondencia con el enunciado y las correcciones del docente
+
+### Consigna
 
 | Requisito | Dónde se cumple |
 |---|---|
-| Investigar e implementar Spring Security y JWT | `backend/gateway/.../security/` (emisión y validación), `backend/{alumnos,administracion}/.../security/` (resource servers) |
-| Integrarlo en una arquitectura Spring Cloud | Gateway + Eureka + Config Server + Spring Cloud LoadBalancer + Spring Boot Admin |
-| Front con login en Angular (optativo) | `frontend/src/app/login/`, `auth.guard.ts`, `auth.interceptor.ts`, `services/auth.service.ts` |
-| Entrega en un repositorio | Este repositorio, con README, `.gitignore` y scripts de arranque |
+| Investigar e implementar Spring Security y JWT | `auth-service` (emisión de tokens), `gateway` (validación y autorización), JJWT 0.12.6 |
+| Integrarlo en una arquitectura Spring Cloud | Gateway + Eureka + Config Server + LoadBalancer + Spring Boot Admin + RabbitMQ |
+| Front con login en Angular (optativo) | `frontend/src/app/login/`, `auth.guard.ts`, `auth.interceptor.ts`, `auth.service.ts` |
+| Entrega en un repositorio | Este repositorio (`Proyecto-escuela` en GitHub), con README, `.gitignore` y scripts |
+
+### Correcciones aplicadas
+
+| Corrección del docente | Cómo se resolvió |
+|---|---|
+| 1. Spring Security en cada microservicio ("monolitos") | Los microservicios de negocio **no tienen Spring Security**: solo el gateway valida/autoriza (§6.1, §6.3) |
+| 2. Gateway manejaba información sensible | Microservicio `auth-service` de identidad + credenciales en el Config Server (§6.1) |
+| 3. Config Server en repo remoto o BD | Backend **git**; `config-repo` publicado en `colegio-config` (privado) (§7) |
+| 4. Microservicios sin secreto entre sí | Cabecera `X-Service-Token` exigida por `alumnos`/`administracion` → 403 sin ella (§6.3) |
+| 5. Entidades en controladores | DTOs con Bean Validation en todos los controladores (§6.5) |
+| 6. No dockerizado | `Dockerfile` (7 servicios) + `frontend/Dockerfile` + `docker-compose.yml` completo (§3.1) |

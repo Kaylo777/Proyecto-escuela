@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  POM agregador de la raiz. No produce un jar: solo agrupa los 6 microservicios.
+  POM agregador de la raiz. No produce un jar: solo agrupa los 7 microservicios.
 
   Utilidad:
    - Un solo comando compila todo:      .\mvnw.cmd -DskipTests package
    - En Eclipse: File > Import > Existing Maven Projects sobre ESTE pom, y aparecen
-     los 6 servicios de una vez (en vez de importarlos uno por uno).
+     los 7 servicios de una vez (en vez de importarlos uno por uno).
    - Un solo lugar para cambiar la version de Spring Boot / Spring Cloud.
 
   Cada microservicio sigue siendo un proyecto Maven independiente y autonomous
@@ -31,6 +31,7 @@
 	<modules>
 		<module>backend/registry</module>
 		<module>backend/config-server</module>
+		<module>backend/auth-service</module>
 		<module>backend/alumnos</module>
 		<module>backend/administracion</module>
 		<module>backend/gateway</module>

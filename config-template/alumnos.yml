@@ -1,0 +1,42 @@
+# Configuracion del microservicio alumnos.
+#
+# Notar que NO hay ninguna seccion de seguridad: este servicio no tiene Spring
+# Security. Autoriza el gateway, y este solo exige el token de servicio que
+# recibe en la cabecera X-Service-Token.
+server:
+  port: 8101
+
+spring:
+  application:
+    name: alumnos
+  datasource:
+    url: jdbc:h2:file:./data/alumnos
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+# Puerto de management separado del de la API. Va en otra cola de conexiones para
+# que las consultas de salud (Eureka, Spring Boot Admin, probes de Docker) no
+# compitan con el trafico de negocio.
+#
+# La exposicion se acota a endpoints no sensibles: /actuator/env, /actuator/beans
+# o /actuator/configprops pueden filtrar credenciales y propiedades internas, y
+# este servicio no tiene Spring Security que las proteja. Es la proteccion que
+# reemplaza a la que antes daba la seguridad por servicio.
+management:
+  server:
+    port: 9111
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always

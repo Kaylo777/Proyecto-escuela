@@ -1,0 +1,39 @@
+# Configuracion del API Gateway.
+#
+# El gateway es el unico punto de entrada publico y el unico que autoriza:
+#   - Valida la firma del access token que emitio el auth-service.
+#   - Aplica la matriz de roles (GET /api/** autenticado; POST, PUT y DELETE solo ADMIN).
+#   - Agrega la cabecera X-Service-Token y enruta.
+#
+# NO tiene usuarios ni contrasenas: esa es la responsabilidad del auth-service.
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            # La autenticacion vive en su propio microservicio. El gateway solo
+            # deja pasar /auth/login y /auth/refresh y enruta el resto a el.
+            - id: auth
+              uri: lb://auth-service
+              predicates:
+                - Path=/auth/**
+            - id: alumnos
+              uri: lb://alumnos
+              predicates:
+                - Path=/api/alumnos/**
+            - id: administracion
+              uri: lb://administracion
+              predicates:
+                - Path=/api/administracion/**
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins: "*"
+                allowed-methods: "*"
+                allowed-headers: "*"
